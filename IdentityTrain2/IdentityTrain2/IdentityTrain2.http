@@ -1,0 +1,6 @@
+@IdentityTrain2_HostAddress = http://localhost:5023
+
+GET {{IdentityTrain2_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
