@@ -23,6 +23,7 @@ namespace IdentityTrain2.Controllers
         private readonly ILogger<ToDoListController> _logger;
         private readonly UserManager<IdentityUser> _userManager;
         private readonly SmtpSettings _smtpSettings;
+        private readonly string _uploadFolder = "UploadFiles";
 
         public ToDoListController(AppDbContext context, ILogger<ToDoListController> logger, IOptions<SmtpSettings> smtpSettings, UserManager<IdentityUser> userManager)
         {
@@ -30,6 +31,9 @@ namespace IdentityTrain2.Controllers
             _logger = logger;
             _smtpSettings = smtpSettings.Value;
             _userManager = userManager;
+
+            if (!Directory.Exists(_uploadFolder))
+                Directory.CreateDirectory(_uploadFolder);
         }
 
         [HttpGet]
@@ -99,10 +103,6 @@ namespace IdentityTrain2.Controllers
                 {
                     _logger.LogWarning($"Список дел {id} не найден для пользователя {userId}");
                     return NotFound();
-                }
-                else
-                {
-                    throw;
                 }
             }
 
@@ -186,6 +186,91 @@ namespace IdentityTrain2.Controllers
                 _logger.LogError($"Ошибка при отправке email: {ex.Message}");
                 return StatusCode(500, "Ошибка при отправке email.");
             }
+        }
+
+        [HttpPost("upload")]
+        public async Task<IActionResult> UploadFile()
+        {
+            try
+            {
+                var file = Request.Form.Files[0];
+
+                if (file.Length > 0)
+                {
+                    var fileName = Guid.NewGuid().ToString() + Path.GetExtension(file.FileName);
+                    var filePath = Path.Combine(_uploadFolder, fileName);
+
+                    using (var stream = new FileStream(filePath, FileMode.Create))
+                    {
+                        await file.CopyToAsync(stream);
+                    }
+
+                    _logger.LogInformation("Файл успешно загружен!");
+                    return Ok(new { fileName });
+                }
+                else
+                {
+                    _logger.LogWarning("Файл пустой или не был найден!");
+                    return BadRequest("Файл пустой");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Ошибка при загрузке файла!");
+                return StatusCode(500, $"Ошибка при загрузке файла: {ex.Message}");
+            }
+        }
+
+        [HttpGet("download/{fileName}")]
+        public IActionResult DownloadFile(string fileName)
+        {
+            try
+            {
+                var filePath = Path.Combine(_uploadFolder, fileName);
+
+                if (!System.IO.File.Exists(filePath))
+                {
+                    _logger.LogWarning("Файл не найден!");
+                    return NotFound("Файл не найден");
+                }
+
+                var fileBytes = System.IO.File.ReadAllBytes(filePath);
+                var contentType = GetContentType(filePath);
+                var fileResult = new FileContentResult(fileBytes, contentType)
+                {
+                    FileDownloadName = fileName
+                };
+
+                Response.Headers.Add("Content-Disposition", $"attachment; filename={fileName}");
+                _logger.LogInformation($"Файл {fileName} успешно скачан!");
+                return fileResult;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($" Ошибка при скачивании файла: {ex.Message}");
+                return StatusCode(500, $"Ошибка при скачивании файла: {ex.Message}");
+            }
+        }
+
+        private string GetContentType(string path)
+        {
+            var types = new Dictionary<string, string>
+            {
+                { ".txt", "text/plain" },
+                { ".pdf", "application/pdf" },
+                { ".doc", "application/vnd.ms-word" },
+                { ".docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
+                { ".xls", "application/vnd.ms-excel" },
+                { ".xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+                { ".png", "image/png" },
+                { ".jpg", "image/jpeg" },
+                { ".jpeg", "image/jpeg" },
+                { ".gif", "image/gif" },
+                { ".csv", "text/csv" }
+            };
+
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            return types.ContainsKey(ext) ? types[ext] : "application/octet-stream";
         }
     }
 }
