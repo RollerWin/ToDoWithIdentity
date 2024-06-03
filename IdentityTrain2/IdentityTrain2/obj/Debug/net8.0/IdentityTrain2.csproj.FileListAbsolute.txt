@@ -111,3 +111,7 @@ D:\работа\стажировка в барс групп\IdentityTrain2\Ident
 D:\работа\стажировка в барс групп\IdentityTrain2\IdentityTrain2\bin\Debug\net8.0\IdentityTrain2.staticwebassets.runtime.json
 D:\работа\стажировка в барс групп\IdentityTrain2\IdentityTrain2\bin\Debug\net8.0\Microsoft.AspNetCore.Identity.UI.dll
 D:\работа\стажировка в барс групп\IdentityTrain2\IdentityTrain2\bin\Debug\net8.0\Microsoft.Extensions.FileProviders.Embedded.dll
+D:\работа\стажировка в барс групп\IdentityTrain2\IdentityTrain2\bin\Debug\net8.0\BouncyCastle.Cryptography.dll
+D:\работа\стажировка в барс групп\IdentityTrain2\IdentityTrain2\bin\Debug\net8.0\MailKit.dll
+D:\работа\стажировка в барс групп\IdentityTrain2\IdentityTrain2\bin\Debug\net8.0\MimeKit.dll
+D:\работа\стажировка в барс групп\IdentityTrain2\IdentityTrain2\obj\Debug\net8.0\IdentityTrain2.sourcelink.json

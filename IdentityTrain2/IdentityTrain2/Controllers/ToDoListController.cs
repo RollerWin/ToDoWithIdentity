@@ -1,10 +1,16 @@
 ﻿using IdentityTrain2.Data;
 using IdentityTrain2.Models;
 using IdentityTrain2.Models.DTO;
+using MailKit.Security;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using MimeKit;
+using MailKit.Net.Smtp;
 using System.Security.Claims;
+using System.Text;
 
 namespace IdentityTrain2.Controllers
 {
@@ -15,11 +21,15 @@ namespace IdentityTrain2.Controllers
     {
         private readonly AppDbContext _context;
         private readonly ILogger<ToDoListController> _logger;
+        private readonly UserManager<IdentityUser> _userManager;
+        private readonly SmtpSettings _smtpSettings;
 
-        public ToDoListController(AppDbContext context, ILogger<ToDoListController> logger)
+        public ToDoListController(AppDbContext context, ILogger<ToDoListController> logger, IOptions<SmtpSettings> smtpSettings, UserManager<IdentityUser> userManager)
         {
             _context = context;
             _logger = logger;
+            _smtpSettings = smtpSettings.Value;
+            _userManager = userManager;
         }
 
         [HttpGet]
@@ -116,6 +126,66 @@ namespace IdentityTrain2.Controllers
 
             _logger.LogInformation($"Дело {id} удалено для пользователя {userId}");
             return NoContent();
+        }
+
+        [HttpPost("send-email")]
+        public async Task<IActionResult> SendToDoListByEmail()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var user = await _userManager.FindByIdAsync(userId);
+
+            if (user == null)
+            {
+                _logger.LogWarning($"Пользователь {userId} не найден.");
+                return NotFound("Пользователь не найден.");
+            }
+
+            var userEmail = user.Email;
+
+            if (string.IsNullOrEmpty(userEmail))
+            {
+                _logger.LogWarning($"Email для пользователя {userId} не найден.");
+                return BadRequest("Email не найден.");
+            }
+
+            var toDoLists = await _context.ToDoLists
+                .Where(t => t.UserId == userId)
+                .ToListAsync();
+
+            var emailBody = new StringBuilder();
+            emailBody.AppendLine("Ваш список дел:");
+            foreach (var toDo in toDoLists)
+            {
+                emailBody.AppendLine($"- {toDo.Title}:\n{toDo.Description}\n");
+            }
+
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress(_smtpSettings.SenderName, _smtpSettings.SenderEmail));
+            message.To.Add(new MailboxAddress(user.UserName ?? userEmail, userEmail));
+            message.Subject = "Ваш список дел";
+            message.Body = new TextPart("plain")
+            {
+                Text = emailBody.ToString()
+            };
+
+            try
+            {
+                using (var client = new SmtpClient())
+                {
+                    await client.ConnectAsync(_smtpSettings.Server, _smtpSettings.Port, SecureSocketOptions.StartTls);
+                    await client.AuthenticateAsync(_smtpSettings.Username, _smtpSettings.Password);
+                    await client.SendAsync(message);
+                    await client.DisconnectAsync(true);
+                }
+
+                _logger.LogInformation($"Список дел отправлен по email для пользователя {userId}");
+                return Ok("Список дел отправлен по email.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Ошибка при отправке email: {ex.Message}");
+                return StatusCode(500, "Ошибка при отправке email.");
+            }
         }
     }
 }
